@@ -102,4 +102,51 @@ Make sure the recipe matches the selected tone and cuisine.
   }
 };
 
-module.exports = { generateRecipe, generateOneShotRecipe, generateDynamicRecipe };
+const generateStructuredRecipe = async (req, res) => {
+  try {
+    const { ingredients } = req.body;
+
+    if (!ingredients || !Array.isArray(ingredients) || ingredients.length === 0) {
+      return res.status(400).json({ error: "Please provide an array of ingredients" });
+    }
+
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+
+    const prompt = `
+You are a professional chef.
+Based on the given ingredients: ${ingredients.join(", ")}, create a recipe.
+
+Return ONLY valid JSON in this exact format:
+{
+  "title": "Recipe title here",
+  "ingredients": [
+    { "name": "ingredient1", "quantity": "amount" },
+    { "name": "ingredient2", "quantity": "amount" }
+  ],
+  "steps": [
+    "Step 1 instruction",
+    "Step 2 instruction"
+  ],
+  "servingSuggestions": "How to serve the dish"
+}
+Do not include extra text or explanations, just the JSON.
+`;
+
+    const result = await model.generateContent(prompt);
+    const text = result.response.text();
+
+    let recipeData;
+    try {
+      recipeData = JSON.parse(text);
+    } catch (err) {
+      return res.status(500).json({ error: "Invalid JSON response from AI", raw: text });
+    }
+
+    res.json(recipeData);
+  } catch (error) {
+    console.error("Error generating structured recipe:", error);
+    res.status(500).json({ error: "Something went wrong" });
+  }
+};
+
+module.exports = { generateRecipe, generateOneShotRecipe, generateDynamicRecipe, generateStructuredRecipe };
