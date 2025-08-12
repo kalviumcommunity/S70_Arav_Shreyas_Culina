@@ -198,4 +198,86 @@ Recipe:
   }
 };
 
-module.exports = { generateRecipe, generateOneShotRecipe, generateDynamicRecipe, generateStructuredRecipe, generateMultiShotRecipe };
+const generateMealPlanCoT = async (req, res) => {
+  try {
+    const {
+      days = 7,
+      caloriesPerDay = 2000,
+      dietaryPref = "none",
+      pantry = [],
+      budget = "moderate",
+      skillLevel = "beginner" // optional
+    } = req.body;
+
+    if (!Number.isInteger(days) || days <= 0) {
+      return res.status(400).json({ error: "days must be a positive integer" });
+    }
+
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+
+    // Prompt: ask for a short chain-of-thought and a final structured JSON
+    const prompt = `
+You are an expert chef and nutritionist. You will PLAN meals step-by-step and then return a final meal plan JSON.
+
+First, in a concise list (max 8 items) show your planning steps (reasoning) — e.g., identify constraints, balance macros, reuse ingredients to minimize shopping, respect budget and pantry.
+
+Then produce ONLY valid JSON in this exact format (no extra text):
+
+{
+  "reasoning_steps": ["step 1", "step 2", "..."],
+  "mealPlan": [
+    {
+      "day": 1,
+      "meals": [
+        {
+          "slot": "Breakfast",
+          "title": "Oats with fruit",
+          "estimated_calories": 400,
+          "macros": {"protein": 15, "carbs": 60, "fat": 10},
+          "ingredients": [{"name":"oats","qty":"50g"}, {"name":"banana","qty":"1"}],
+          "prepTime": "10 min"
+        }
+      ]
+    }
+    /* repeat for each day */
+  ],
+  "shoppingList": ["item1", "item2", "..."],
+  "notes": "Any extra notes (optional)"
+}
+
+Constraints:
+- days: ${days}
+- target calories/day: ${caloriesPerDay}
+- dietary preference: ${dietaryPref}
+- pantry items (prefer to use): ${pantry.length ? pantry.join(", ") : "none"}
+- budget level: ${budget}
+- user skill level: ${skillLevel}
+
+Important:
+- Keep reasoning_steps concise (max 8 short bullet items).
+- Ensure mealPlan satisfies calories roughly per day and reuses pantry items where possible.
+- RETURN ONLY the JSON above and nothing else.
+`;
+
+    const result = await model.generateContent(prompt);
+    const text = result.response.text();
+
+    // Try to parse JSON
+    let parsed;
+    try {
+      parsed = JSON.parse(text);
+    } catch (err) {
+      // If parsing fails, return helpful debugging info
+      return res.status(500).json({
+        error: "Invalid JSON from model",
+        raw: text
+      });
+    }
+
+    return res.json(parsed);
+  } catch (error) {
+    console.error("Error generating CoT meal plan:", error);
+    return res.status(500).json({ error: "Something went wrong" });
+  }
+};
+module.exports = { generateRecipe, generateOneShotRecipe, generateDynamicRecipe, generateStructuredRecipe, generateMultiShotRecipe, generateMealPlanCoT };
