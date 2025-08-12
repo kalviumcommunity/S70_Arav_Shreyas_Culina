@@ -149,4 +149,53 @@ Do not include extra text or explanations, just the JSON.
   }
 };
 
-module.exports = { generateRecipe, generateOneShotRecipe, generateDynamicRecipe, generateStructuredRecipe };
+const generateMultiShotRecipe = async (req, res) => {
+  try {
+    const { ingredients } = req.body;
+
+    if (!ingredients || !Array.isArray(ingredients) || ingredients.length === 0) {
+      return res.status(400).json({ error: "Please provide an array of ingredients" });
+    }
+
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+
+    // Multi-Shot Prompt with two examples
+    const prompt = `
+You are a professional chef. I will give you ingredients, and you will return a recipe with a title and step-by-step instructions.
+
+Example 1:
+Ingredients: chicken, garlic, lemon, olive oil
+Recipe:
+Title: Garlic Lemon Roasted Chicken
+Steps:
+1. Preheat oven to 200°C (400°F).
+2. Rub chicken with olive oil, minced garlic, and lemon juice.
+3. Roast for 45 minutes until golden brown.
+4. Serve with fresh herbs.
+
+Example 2:
+Ingredients: tomatoes, basil, mozzarella, balsamic vinegar
+Recipe:
+Title: Caprese Salad
+Steps:
+1. Slice tomatoes and mozzarella cheese.
+2. Arrange on a plate with fresh basil leaves.
+3. Drizzle with balsamic vinegar.
+4. Serve immediately.
+
+Now it's your turn:
+Ingredients: ${ingredients.join(", ")}
+Recipe:
+`;
+
+    const result = await model.generateContent(prompt);
+    const text = result.response.text();
+
+    res.json({ recipe: text });
+  } catch (error) {
+    console.error("Error generating multi-shot recipe:", error);
+    res.status(500).json({ error: "Something went wrong" });
+  }
+};
+
+module.exports = { generateRecipe, generateOneShotRecipe, generateDynamicRecipe, generateStructuredRecipe, generateMultiShotRecipe };
