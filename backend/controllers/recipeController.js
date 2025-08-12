@@ -65,4 +65,41 @@ Now, create a recipe using only these ingredients: ${ingredients.join(", ")}.
   }
 };
 
-module.exports = { generateRecipe, generateOneShotRecipe };
+const generateDynamicRecipe = async (req, res) => {
+  try {
+    const { ingredients, tone, cuisine } = req.body;
+
+    if (!ingredients || !Array.isArray(ingredients) || ingredients.length === 0) {
+      return res.status(400).json({ error: "Please provide an array of ingredients" });
+    }
+
+    const selectedTone = tone || "professional";
+    const selectedCuisine = cuisine || "any";
+
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+
+    const prompt = `
+You are a ${selectedTone} chef specializing in ${selectedCuisine} cuisine.
+Based on these ingredients: ${ingredients.join(", ")}, create a recipe with:
+1. A catchy title
+2. List of ingredients with quantities
+3. Step-by-step cooking instructions
+4. Serving suggestions
+Make sure the recipe matches the selected tone and cuisine.
+`;
+
+    const result = await model.generateContent(prompt);
+    const text = result.response.text();
+
+    res.json({
+      tone: selectedTone,
+      cuisine: selectedCuisine,
+      recipe: text
+    });
+  } catch (error) {
+    console.error("Error generating dynamic recipe:", error);
+    res.status(500).json({ error: "Something went wrong" });
+  }
+};
+
+module.exports = { generateRecipe, generateOneShotRecipe, generateDynamicRecipe };
